@@ -51,8 +51,8 @@ struct SettingsView: View {
                 }
                 Spacer()
                 Menu {
-                    ForEach(Provider.allCases) { provider in
-                        Button(provider.name) {
+                    ForEach(Provider.allCases.filter { !$0.availableSources.isEmpty }) { provider in
+                        Button(provider == .chatgpt ? "Codex" : provider.name) {
                             editing = TrackedPlan(provider: provider)
                         }
                     }
@@ -90,12 +90,12 @@ struct SettingsView: View {
             .overlay {
                 if store.plans.isEmpty {
                     ContentUnavailableView("No plans yet", systemImage: "square.stack.3d.up",
-                                           description: Text("Add Claude, ChatGPT, Google, or another subscription."))
+                                           description: Text("Connect a Claude or Codex subscription to start tracking usage."))
                 }
             }
             .clipShape(RoundedRectangle(cornerRadius: 10))
             .disabled(!store.loadedSafely)
-            Text("Manual entries are labeled in the menu panel. Connected sources are checked every minute while the app runs. No telemetry or third-party libraries.")
+            Text("Connected sources are checked every minute while the app runs. Google AI and regular ChatGPT chat tracking are not available yet.")
                 .font(.caption).foregroundStyle(.secondary)
         }
         .padding(16)
@@ -112,7 +112,7 @@ struct SettingsView: View {
                     Task { await store.disconnectWebsite(.codex) }
                 }
                 .disabled(!store.loadedSafely || store.refreshing || store.codexWebsite.reading)
-                Text("Experimental: reads English usage cards and refreshes every minute. Website changes or blocked embedded sign-in can prevent connection. Existing manual and CLI plans are preserved.")
+                Text("Experimental: reads English usage cards and refreshes every minute. Website changes or blocked embedded sign-in can prevent connection. Your other connected plans are preserved.")
                     .font(.caption).foregroundStyle(.secondary)
             }
 
@@ -158,7 +158,7 @@ struct SettingsView: View {
             }
 
             Section("Web subscriptions") {
-                Text("Use manual entries for Google AI and regular ChatGPT chat limits. The Claude and Codex website readers above are experimental connections to their subscription usage pages.")
+                Text("Claude and Codex website connections are available above. Google AI and regular ChatGPT chat usage are not supported yet.")
                     .font(.callout)
             }
             Section("Local data") {

@@ -4,10 +4,21 @@ public struct PlanConfiguration: Codable {
     public var version: Int = 1
     public var plans: [TrackedPlan]
     public var codexExecutable: String
+    /// Retain old entries for recovery without showing or editing manual subscriptions.
+    public var archivedManualPlans: [TrackedPlan]?
 
     public init(plans: [TrackedPlan] = [], codexExecutable: String = "") {
         self.plans = plans
         self.codexExecutable = codexExecutable
+    }
+
+    @discardableResult
+    public mutating func archiveManualPlans() -> Bool {
+        let manual = plans.filter { $0.source == .manual }
+        guard !manual.isEmpty else { return false }
+        archivedManualPlans = (archivedManualPlans ?? []) + manual
+        plans.removeAll { $0.source == .manual }
+        return true
     }
 }
 

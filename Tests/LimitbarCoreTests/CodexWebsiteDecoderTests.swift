@@ -83,7 +83,7 @@ final class CodexWebsiteDecoderTests: XCTestCase {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         let repository = PlanRepository(fileURL: directory.appendingPathComponent("plans.json"))
-        let manual = TrackedPlan(provider: .claude, name: "My plan")
+        let manual = TrackedPlan(provider: .claude, name: "My plan", source: .manual)
         let web = TrackedPlan(provider: .chatgpt, name: "Codex", source: .codexWeb,
                               snapshot: try decode([["id": "session", "text": "80% remaining"]]))
         try repository.save(PlanConfiguration(plans: [manual, web]))

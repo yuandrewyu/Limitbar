@@ -4,6 +4,13 @@ public enum Provider: String, Codable, CaseIterable, Identifiable {
     case claude, chatgpt, gemini, other
 
     public var id: String { rawValue }
+    public var availableSources: [UsageSource] {
+        switch self {
+        case .claude: return [.claudeWeb, .claudeCode]
+        case .chatgpt: return [.codexWeb, .codex]
+        case .gemini, .other: return []
+        }
+    }
     public var name: String {
         switch self {
         case .claude: return "Claude"
@@ -89,11 +96,11 @@ public struct TrackedPlan: Codable, Identifiable, Equatable {
     public var snapshot: UsageSnapshot?
 
     public init(id: UUID = UUID(), provider: Provider = .claude, name: String = "",
-                source: UsageSource = .manual, snapshot: UsageSnapshot? = nil) {
+                source: UsageSource? = nil, snapshot: UsageSnapshot? = nil) {
         self.id = id
         self.provider = provider
         self.name = name
-        self.source = source
+        self.source = source ?? provider.availableSources.first ?? .manual
         self.snapshot = snapshot
     }
 

@@ -56,7 +56,7 @@ struct DashboardView: View {
                     Image(systemName: "square.stack.3d.up")
                         .font(.system(size: 34, weight: .light)).foregroundStyle(.secondary)
                     Text("One place for your AI plans").font(.headline)
-                    Text("Add your subscriptions to see usage windows and reset times here.")
+                    Text("Connect your subscriptions to see usage windows and reset times here.")
                         .font(.callout).foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                     Button("Add your first plan", action: managePlans)
@@ -88,7 +88,7 @@ struct DashboardView: View {
                     }
                 }
                 .disabled(store.refreshing)
-                .help("Read connected sources again. Manual entries stay as entered.")
+                .help("Read connected sources again.")
                 .accessibilityLabel("Refresh connected sources")
                 Menu {
                     Button("Open data folder") { store.showDataFolder() }
@@ -170,8 +170,7 @@ struct PlanCard: View {
             } else {
                 Text("Usage unavailable · Manage plans to connect")
                     .font(.system(size: 10)).foregroundStyle(.secondary)
-                    .help(plan.source == .manual ? "Enter usage manually or select a website connection in Manage plans."
-                          : "Open Manage plans → Connections to sign in.")
+                    .help("Open Manage plans → Connections to sign in.")
             }
 
             if let error {

@@ -15,7 +15,7 @@ final class UsageStore: ObservableObject {
     lazy var codexWebsite = WebsiteConnection(service: .codex)
     lazy var claudeWebsite = WebsiteConnection(service: .claude)
 
-    var plans: [TrackedPlan] { configuration.plans }
+    var plans: [TrackedPlan] { configuration.plans.filter { $0.source != .manual } }
 
     init() {
         reload()
@@ -33,14 +33,8 @@ final class UsageStore: ObservableObject {
             configuration = try repository.load()
             storageError = nil
             loadedSafely = true
-            if !FileManager.default.fileExists(atPath: repository.fileURL.path) {
-                configuration.plans = [
-                    TrackedPlan(provider: .claude, name: "Claude subscription"),
-                    TrackedPlan(provider: .chatgpt, name: "ChatGPT subscription"),
-                    TrackedPlan(provider: .gemini, name: "Google AI subscription")
-                ]
-                _ = commit(configuration)
-            }
+            var updated = configuration
+            if updated.archiveManualPlans() { _ = commit(updated) }
         } catch {
             loadedSafely = false
             storageError = "Your saved plans could not be read. The file has been left untouched. \(error.localizedDescription)"
@@ -49,7 +43,7 @@ final class UsageStore: ObservableObject {
 
     @discardableResult
     func save(_ plan: TrackedPlan) -> Bool {
-        guard loadedSafely else { return false }
+        guard loadedSafely, plan.provider.availableSources.contains(plan.source) else { return false }
         var updated = configuration
         if let index = updated.plans.firstIndex(where: { $0.id == plan.id }) {
             updated.plans[index] = plan
@@ -115,10 +109,7 @@ final class UsageStore: ObservableObject {
         refreshing = true
         defer { refreshing = false }
         var updated = configuration
-        for index in updated.plans.indices where updated.plans[index].source == service.source {
-            updated.plans[index].source = .manual
-            updated.plans[index].snapshot = nil
-        }
+        updated.plans.removeAll { $0.source == service.source }
         guard commit(updated) else { return }
         refreshErrors = refreshErrors.filter { id, _ in plans.contains { $0.id == id && $0.source != .manual } }
         await connection.clearSession()

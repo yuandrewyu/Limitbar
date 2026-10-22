@@ -18,7 +18,7 @@ struct WelcomeView: View {
                       systemImage: "menubar.arrow.up.rectangle")
                 Label("Click it to see your plans, usage windows, and reset times.",
                       systemImage: "cursorarrow")
-                Label("Open Manage plans to enter usage or set up a connection.",
+                Label("Open Manage plans to connect your subscriptions.",
                       systemImage: "slider.horizontal.3")
             }
             .foregroundStyle(.secondary)
