@@ -1,0 +1,13 @@
+name: macOS
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test usage decoding and persistence
+        run: swift test
+      - name: Build and verify app bundle
+        run: bash Scripts/build-app.sh
