@@ -71,8 +71,8 @@ struct SettingsView: View {
             List {
                 ForEach(store.plans) { plan in
                     HStack(spacing: 12) {
-                        Image(systemName: plan.provider.symbol).foregroundStyle(plan.provider.tint)
-                            .font(.title3).frame(width: 28)
+                        ProviderIcon(provider: plan.provider, size: 20)
+                            .frame(width: 28)
                         VStack(alignment: .leading, spacing: 3) {
                             Text(plan.displayName).font(.headline)
                             Text("\(plan.provider.name) · \(plan.source.name)")
@@ -103,6 +103,32 @@ struct SettingsView: View {
 
     private var connectionsTab: some View {
         Form {
+            Section("Codex website · Prototype") {
+                Text("Connect through the Codex usage website without installing the CLI. Sign in in Limitbar’s browser, then click Read usage & connect. A separate Codex plan is added after a successful reading.")
+                    .font(.callout)
+                Button("Connect Codex website…") { store.showCodexWebsite() }
+                    .disabled(!store.loadedSafely)
+                Button("Disconnect and clear website session") {
+                    Task { await store.disconnectWebsite(.codex) }
+                }
+                .disabled(!store.loadedSafely || store.refreshing || store.codexWebsite.reading)
+                Text("Experimental: reads English usage cards and refreshes every minute. Website changes or blocked embedded sign-in can prevent connection. Existing manual and CLI plans are preserved.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+
+            Section("Claude website · Prototype") {
+                Text("Sign in to Claude inside Limitbar, open Your usage, then click Read usage & connect. A separate Claude plan is added after a successful reading; no Claude Code installation is needed.")
+                    .font(.callout)
+                Button("Connect Claude website…") { store.showClaudeWebsite() }
+                    .disabled(!store.loadedSafely)
+                Button("Disconnect and clear Claude website session") {
+                    Task { await store.disconnectWebsite(.claude) }
+                }
+                .disabled(!store.loadedSafely || store.refreshing || store.claudeWebsite.reading)
+                Text("Reads Current session and This week, with automatic refresh every minute. Clock-based reset dates use your Mac’s local time zone and are marked approximate. Claude and Codex sign-in sessions are kept separately.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+
             Section("Claude Code") {
                 Text("To receive subscription limits from Claude Code, add this statusLine entry to ~/.claude/settings.json on your Mac, then start a new Claude Code session.")
                     .font(.callout)
@@ -132,12 +158,12 @@ struct SettingsView: View {
             }
 
             Section("Web subscriptions") {
-                Text("Use manual entries for Google AI, regular ChatGPT chat limits, or any plan without a verified connection. Enter only limits actually shown by the provider. Automatic web-account connections are not implemented in this version.")
+                Text("Use manual entries for Google AI and regular ChatGPT chat limits. The Claude and Codex website readers above are experimental connections to their subscription usage pages.")
                     .font(.callout)
             }
             Section("Local data") {
                 Button("Open Limitbar data folder") { store.showDataFolder() }
-                Text("Saved plans and quota snapshots stay in Application Support/Limitbar. The Claude bridge keeps only quota fields. Credentials stay with the official CLI. Connected CLIs may contact their provider to refresh usage.")
+                Text("Saved plans and quota snapshots stay in Application Support/Limitbar. Website sign-in uses Limitbar’s local WebKit session; it does not import browser cookies. The app saves only extracted quota values, not website contents or passwords. CLI credentials remain with the CLI.")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }

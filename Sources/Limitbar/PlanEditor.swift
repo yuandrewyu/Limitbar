@@ -17,8 +17,8 @@ struct PlanEditor: View {
 
     private var availableSources: [UsageSource] {
         switch draft.provider {
-        case .claude: return [.manual, .claudeCode]
-        case .chatgpt: return [.manual, .codex]
+        case .claude: return [.manual, .claudeCode, .claudeWeb]
+        case .chatgpt: return [.manual, .codex, .codexWeb]
         default: return [.manual]
         }
     }
@@ -44,7 +44,7 @@ struct PlanEditor: View {
                 }
 
                 if draft.source == .manual {
-                    Section("Usage windows") {
+                    Section {
                         ForEach($windows) { $window in
                             ManualWindowEditor(window: $window) {
                                 windows.removeAll { $0.id == window.id }
@@ -53,8 +53,20 @@ struct PlanEditor: View {
                         Button("Add a usage window", systemImage: "plus") {
                             windows.append(UsageWindow(name: windows.isEmpty ? "Current window" : "Weekly"))
                         }
+                    } header: {
+                        Text("Usage windows")
                     } footer: {
                         Text("Copy the percentage USED from the provider. Leave it blank if unknown. Add separate windows for session, weekly, or model-specific limits.")
+                    }
+                } else if draft.source == .claudeWeb {
+                    Section {
+                        Text("Reads Current session and This week from Claude’s usage settings after you sign in. Local clock reset dates are inferred and marked approximate.")
+                        Button("Open Claude website connection…") { store.showClaudeWebsite() }
+                    }
+                } else if draft.source == .codexWeb {
+                    Section {
+                        Text("Reads the Codex usage page after you sign in. This prototype supports English usage cards and keeps unreadable values unknown.")
+                        Button("Open Codex website connection…") { store.showCodexWebsite() }
                     }
                 } else {
                     Section {

@@ -16,7 +16,7 @@ public enum Provider: String, Codable, CaseIterable, Identifiable {
     public var website: URL {
         let address: String
         switch self {
-        case .claude: address = "https://claude.ai/settings/usage"
+        case .claude: address = "https://claude.ai/new#settings/usage"
         case .chatgpt: address = "https://chatgpt.com"
         case .gemini: address = "https://gemini.google.com"
         case .other: address = "https://example.com"
@@ -26,13 +26,15 @@ public enum Provider: String, Codable, CaseIterable, Identifiable {
 }
 
 public enum UsageSource: String, Codable, CaseIterable, Identifiable {
-    case manual, claudeCode, codex
+    case manual, claudeCode, codex, codexWeb, claudeWeb
     public var id: String { rawValue }
     public var name: String {
         switch self {
         case .manual: return "Manual entry"
         case .claudeCode: return "Claude Code status line"
         case .codex: return "Codex CLI"
+        case .codexWeb: return "Codex website (prototype)"
+        case .claudeWeb: return "Claude website (prototype)"
         }
     }
 }
@@ -43,13 +45,16 @@ public struct UsageWindow: Codable, Identifiable, Equatable {
     /// nil means unavailable. It must never be displayed as zero usage.
     public var usedPercent: Double?
     public var resetsAt: Date?
+    /// Optional so saved readings from earlier versions remain decodable.
+    public var resetIsApproximate: Bool?
 
     public init(id: String = UUID().uuidString, name: String,
-                usedPercent: Double? = nil, resetsAt: Date? = nil) {
+                usedPercent: Double? = nil, resetsAt: Date? = nil, resetIsApproximate: Bool? = nil) {
         self.id = id
         self.name = name
         self.usedPercent = usedPercent
         self.resetsAt = resetsAt
+        self.resetIsApproximate = resetIsApproximate
     }
 
     public var fraction: Double? {
@@ -95,7 +100,7 @@ public struct TrackedPlan: Codable, Identifiable, Equatable {
     public var displayName: String { name.isEmpty ? provider.name : name }
 
     public var website: URL {
-        source == .codex ? URL(string: "https://chatgpt.com/codex/settings/usage")! : provider.website
+        source == .codex || source == .codexWeb ? CodexWebsiteDecoder.usageURL : provider.website
     }
 
     public func highestCurrentUsage(at now: Date) -> Double? {

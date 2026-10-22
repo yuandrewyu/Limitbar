@@ -12,6 +12,8 @@ final class UsageStore: ObservableObject {
     @Published private(set) var loadedSafely = false
     private let repository = PlanRepository()
     private var refreshTask: Task<Void, Never>?
+    lazy var codexWebsite = WebsiteConnection(service: .codex)
+    lazy var claudeWebsite = WebsiteConnection(service: .claude)
 
     var plans: [TrackedPlan] { configuration.plans }
 
@@ -74,6 +76,54 @@ final class UsageStore: ObservableObject {
         source != .manual && plans.contains { $0.id != id && $0.source == source }
     }
 
+    func showCodexWebsite() {
+        codexWebsite.show(store: self)
+    }
+
+    func showClaudeWebsite() {
+        claudeWebsite.show(store: self)
+    }
+
+    private func website(_ service: WebsiteService) -> WebsiteConnection {
+        service == .codex ? codexWebsite : claudeWebsite
+    }
+
+    func connectWebsite(_ service: WebsiteService) async {
+        guard loadedSafely, !refreshing else { return }
+        let connection = website(service)
+        refreshing = true
+        defer { refreshing = false }
+        do {
+            let snapshot = try await connection.read(reload: false)
+            var updated = configuration
+            if let index = updated.plans.firstIndex(where: { $0.source == service.source }) {
+                updated.plans[index].snapshot = snapshot
+            } else {
+                updated.plans.append(TrackedPlan(provider: service.provider, name: "\(service.name) · Website",
+                                                 source: service.source, snapshot: snapshot))
+            }
+            if commit(updated) {
+                for plan in plans where plan.source == service.source { refreshErrors[plan.id] = nil }
+                connection.status = "Connected. Read \(snapshot.windows.count) usage window(s). Limitbar will reload the usage page every minute."
+            } else { connection.status = storageError ?? "Could not save the connection." }
+        } catch { connection.status = error.localizedDescription }
+    }
+
+    func disconnectWebsite(_ service: WebsiteService) async {
+        let connection = website(service)
+        guard loadedSafely, !refreshing, !connection.reading else { return }
+        refreshing = true
+        defer { refreshing = false }
+        var updated = configuration
+        for index in updated.plans.indices where updated.plans[index].source == service.source {
+            updated.plans[index].source = .manual
+            updated.plans[index].snapshot = nil
+        }
+        guard commit(updated) else { return }
+        refreshErrors = refreshErrors.filter { id, _ in plans.contains { $0.id == id && $0.source != .manual } }
+        await connection.clearSession()
+    }
+
     func showDataFolder() {
         let directory = LimitbarPaths.directory
         do {
@@ -109,6 +159,10 @@ final class UsageStore: ObservableObject {
                     }
                 case .codex:
                     snapshot = try await CodexClient.fetch(executable: CodexClient.findExecutable(override: executable))
+                case .codexWeb:
+                    snapshot = try await codexWebsite.read(reload: true)
+                case .claudeWeb:
+                    snapshot = try await claudeWebsite.read(reload: true)
                 }
                 guard let index = configuration.plans.firstIndex(where: {
                     $0.id == plan.id && $0.source == plan.source

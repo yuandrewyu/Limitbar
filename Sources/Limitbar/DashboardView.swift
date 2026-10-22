@@ -25,25 +25,26 @@ extension Provider {
 @MainActor
 struct DashboardView: View {
     @ObservedObject var store: UsageStore
+    let maximumHeight: CGFloat
+    let managePlans: () -> Void
+    @State private var contentHeight: CGFloat = 1
 
     var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 10) {
-                Image(systemName: "gauge.with.dots.needle.50percent")
-                    .font(.title2).foregroundStyle(.tint)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Limitbar").font(.headline)
-                    Text("Your AI, at a glance.").font(.caption).foregroundStyle(.secondary)
+        ScrollView {
+            panelContent
+                .fixedSize(horizontal: false, vertical: true)
+                .background {
+                    GeometryReader { geometry in
+                        Color.clear.preference(key: DashboardHeightKey.self, value: geometry.size.height)
+                    }
                 }
-                Spacer()
-                Text("ON THIS MAC")
-                    .font(.system(size: 8, weight: .semibold, design: .rounded))
-                    .tracking(1).foregroundStyle(.secondary)
-            }
-            .padding(20)
+        }
+        .frame(width: 400, height: min(contentHeight, max(1, maximumHeight)))
+        .onPreferenceChange(DashboardHeightKey.self) { contentHeight = $0 }
+    }
 
-            Divider()
-
+    private var panelContent: some View {
+        VStack(spacing: 0) {
             if let error = store.storageError {
                 Label(error, systemImage: "exclamationmark.triangle")
                     .font(.caption).foregroundStyle(.orange)
@@ -58,29 +59,24 @@ struct DashboardView: View {
                     Text("Add your subscriptions to see usage windows and reset times here.")
                         .font(.callout).foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
-                    SettingsLink { Text("Add your first plan") }
+                    Button("Add your first plan", action: managePlans)
                         .buttonStyle(.borderedProminent)
-                        .simultaneousGesture(TapGesture().onEnded { NSApp.activate(ignoringOtherApps: true) })
                 }
                 .padding(28)
             } else {
-                ScrollView {
-                    TimelineView(.periodic(from: .now, by: 30)) { context in
-                        LazyVStack(spacing: 12) {
-                            ForEach(store.plans) { plan in
-                                PlanCard(plan: plan, error: store.refreshErrors[plan.id], now: context.date)
-                            }
+                TimelineView(.periodic(from: .now, by: 30)) { context in
+                    VStack(spacing: 0) {
+                        ForEach(store.plans) { plan in
+                            PlanCard(plan: plan, error: store.refreshErrors[plan.id], now: context.date)
+                            if plan.id != store.plans.last?.id { Divider() }
                         }
-                        .padding(16)
                     }
                 }
-                .frame(maxHeight: 470)
             }
 
             Divider()
             HStack(spacing: 12) {
-                SettingsLink { Label("Manage plans", systemImage: "slider.horizontal.3") }
-                    .simultaneousGesture(TapGesture().onEnded { NSApp.activate(ignoringOtherApps: true) })
+                Button(action: managePlans) { Label("Manage plans", systemImage: "slider.horizontal.3") }
                 Spacer()
                 Button {
                     Task { await store.refresh() }
@@ -105,9 +101,16 @@ struct DashboardView: View {
             }
             .font(.caption)
             .buttonStyle(.plain)
-            .padding(.horizontal, 18).padding(.vertical, 14)
+            .padding(.horizontal, 14).padding(.vertical, 10)
         }
-        .frame(width: 370)
+        .frame(width: 400)
+    }
+}
+
+private struct DashboardHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 1
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
     }
 }
 
@@ -117,25 +120,46 @@ struct PlanCard: View {
     let error: String?
     let now: Date
 
+    private var title: String {
+        if plan.source == .codex || plan.source == .codexWeb { return "Codex" }
+        return plan.provider == .other ? plan.displayName : plan.provider.name
+    }
+
+    private var sourceLabel: String {
+        switch plan.source {
+        case .manual: return "Manual"
+        case .claudeWeb, .codexWeb: return "Website"
+        case .claudeCode: return "Claude Code"
+        case .codex: return "Codex CLI"
+        }
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 10) {
-                Image(systemName: plan.provider.symbol)
-                    .font(.system(size: 17, weight: .medium))
-                    .foregroundStyle(plan.provider.tint)
-                    .frame(width: 34, height: 34)
-                    .background(plan.provider.tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 9) {
+                ProviderIcon(provider: plan.provider)
+                    .frame(width: 24, height: 24)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(plan.displayName).font(.system(.callout, design: .rounded, weight: .semibold))
-                    Text(plan.source == .codex ? "Codex allowance · ChatGPT plan" : plan.provider.name)
-                        .font(.caption).foregroundStyle(.secondary)
+                    Text(title).font(.system(size: 13, weight: .semibold))
+                    Text("\(sourceLabel) · \(plan.displayName)")
+                        .font(.system(size: 10)).foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .help("\(plan.displayName) · \(plan.source.name)")
                 }
                 Spacer(minLength: 4)
+                if let snapshot = plan.snapshot {
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text(snapshot.isStale(at: now) || error != nil ? "Last reading" : "Updated")
+                        Text(snapshot.capturedAt, style: .relative)
+                    }
+                    .font(.system(size: 9)).foregroundStyle(.secondary)
+                    .help("Last captured: \(snapshot.capturedAt.formatted()). Readings older than 15 minutes are stale.")
+                }
                 if plan.provider != .other {
                     Link(destination: plan.website) { Image(systemName: "arrow.up.right") }
-                        .font(.caption).foregroundStyle(.secondary)
-                        .help("Open \(plan.provider.name) in your browser")
-                        .accessibilityLabel("Open \(plan.provider.name) usage page")
+                        .font(.system(size: 9)).foregroundStyle(.secondary)
+                        .help("Open \(title) usage page")
+                        .accessibilityLabel("Open \(title) usage page")
                 }
             }
 
@@ -143,65 +167,85 @@ struct PlanCard: View {
                 ForEach(snapshot.windows) { window in
                     windowView(window, stale: snapshot.isStale(at: now) || error != nil)
                 }
-                HStack(spacing: 4) {
-                    Image(systemName: plan.source == .manual ? "pencil" : "link")
-                    Text(plan.source == .manual ? "Manual entry" : "From \(plan.source == .codex ? "Codex CLI" : "Claude Code")")
-                    Text("·")
-                    Text(snapshot.capturedAt, style: .relative)
-                    if snapshot.isStale(at: now) { Text("· Stale").foregroundStyle(.orange) }
-                }
-                .font(.system(size: 10)).foregroundStyle(.secondary)
-                .help("Last captured: \(snapshot.capturedAt.formatted()). Readings older than 15 minutes are stale.")
             } else {
-                Label("Usage not available", systemImage: "minus.circle")
-                    .font(.callout).foregroundStyle(.secondary)
-                Text(plan.source == .manual
-                     ? "Enter the usage shown by your provider in Manage plans."
-                     : "Connect your local coding tool in Manage plans.")
-                    .font(.caption).foregroundStyle(.secondary)
+                Text("Usage unavailable · Manage plans to connect")
+                    .font(.system(size: 10)).foregroundStyle(.secondary)
+                    .help(plan.source == .manual ? "Enter usage manually or select a website connection in Manage plans."
+                          : "Open Manage plans → Connections to sign in.")
             }
 
             if let error {
                 Label(error, systemImage: "exclamationmark.circle")
-                    .font(.caption).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
+                    .font(.system(size: 10)).foregroundStyle(.orange)
+                    .lineLimit(2).help(error)
+                    .accessibilityLabel(error)
+            } else if plan.snapshot?.isStale(at: now) == true {
+                Text("Stale reading · awaiting an update")
+                    .font(.system(size: 10)).foregroundStyle(.orange)
             }
         }
-        .padding(14)
-        .background(.background, in: RoundedRectangle(cornerRadius: 14))
-        .overlay { RoundedRectangle(cornerRadius: 14).strokeBorder(Color.primary.opacity(0.07)) }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
     }
 
-    @ViewBuilder
+    private func shortName(_ window: UsageWindow) -> String {
+        switch window.name {
+        case "5 hours": return "5-hour"
+        case "Current session": return "Session"
+        case "Weekly", "This week", "7 days": return "Week"
+        default: return window.name
+        }
+    }
+
     private func windowView(_ window: UsageWindow, stale: Bool) -> some View {
         let reset = window.hasReset(at: now)
         let fraction = window.fraction
         let tint: Color = reset || stale ? .secondary : (fraction ?? 0) >= 0.9 ? .orange : plan.provider.tint
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text(window.name).font(.caption).foregroundStyle(.secondary)
-                Spacer()
-                if let percent = window.usedPercent, fraction != nil {
-                    Text("\(percent.formatted(.number.precision(.fractionLength(0...1))))% used")
-                        .font(.system(.caption, design: .rounded, weight: .semibold))
-                        .monospacedDigit()
-                } else { Text("Unknown").font(.caption).foregroundStyle(.secondary) }
-            }
-            if let fraction {
-                ProgressView(value: fraction).tint(tint)
-                    .accessibilityLabel("\(window.name), \(window.usedPercent ?? 0) percent used\(stale || reset ? ", last known reading" : "")")
-            }
-            if reset {
-                Text("Reset time passed · awaiting a new reading")
-                    .font(.system(size: 10)).foregroundStyle(.orange)
-            } else if let date = window.resetsAt {
-                HStack(spacing: 3) {
-                    Image(systemName: "clock")
-                    Text("Resets in")
-                    Text(date, style: .relative)
+        return HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(shortName(window))
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(stale || reset ? .secondary : .primary)
+                    .lineLimit(2)
+                if reset {
+                    Text("Awaiting update").foregroundStyle(.orange)
+                        .font(.system(size: 9))
+                } else if let date = window.resetsAt {
+                    Text("resets \(window.resetIsApproximate == true ? "≈ " : "")\(date.formatted(.dateTime.weekday(.abbreviated).hour().minute()))")
+                        .font(.system(size: 9)).foregroundStyle(.secondary)
+                        .lineLimit(1).minimumScaleFactor(0.8)
+                        .help((window.resetIsApproximate == true ? "Estimated from the website’s reset display. " : "") + date.formatted(date: .abbreviated, time: .shortened))
+                } else {
+                    Text("Reset unknown").font(.system(size: 9)).foregroundStyle(.secondary)
                 }
-                .font(.system(size: 10)).foregroundStyle(.secondary)
-                .help(date.formatted(date: .abbreviated, time: .shortened))
             }
+            .frame(width: 132, alignment: .leading)
+
+            GeometryReader { geometry in
+                Capsule().fill(Color.primary.opacity(0.13))
+                    .overlay(alignment: .leading) {
+                        if let fraction {
+                            Capsule().fill(tint).frame(width: geometry.size.width * fraction)
+                        }
+                    }
+            }
+            .frame(height: 4)
+            .accessibilityHidden(true)
+
+            Group {
+                if let percent = window.usedPercent, fraction != nil {
+                    Text("\(percent.formatted(.number.precision(.fractionLength(0...1))))%")
+                        .foregroundStyle(stale || reset ? .secondary : .primary)
+                } else {
+                    Text("—").foregroundStyle(.secondary)
+                }
+            }
+            .font(.system(size: 12, weight: .semibold))
+            .monospacedDigit()
+            .frame(width: 42, alignment: .trailing)
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityValue(fraction == nil ? "Usage unknown" : "\(window.usedPercent ?? 0) percent used\(stale || reset ? ", last known reading" : "")")
+        .help("\(window.name): \(fraction == nil ? "unknown usage" : "percentage used")")
     }
 }

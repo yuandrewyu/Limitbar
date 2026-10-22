@@ -10,7 +10,7 @@ let package = Package(
     ],
     targets: [
         .target(name: "LimitbarCore"),
-        .executableTarget(name: "Limitbar", dependencies: ["LimitbarCore"]),
+        .executableTarget(name: "Limitbar", dependencies: ["LimitbarCore"], resources: [.copy("Assets")]),
         .executableTarget(name: "LimitbarBridge", dependencies: ["LimitbarCore"]),
         .testTarget(name: "LimitbarCoreTests", dependencies: ["LimitbarCore"])
     ]
